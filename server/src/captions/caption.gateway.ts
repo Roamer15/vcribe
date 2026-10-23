@@ -13,6 +13,11 @@ import { Server, Socket } from 'socket.io';
 import { RoomService } from '../room/room.service';
 import { TranscriptionService } from './transcription.service';
 
+interface CustomSocketData {
+  code?: string;
+  role?: 'speaker' | 'display';
+}
+
 @WebSocketGateway({ cors: { origin: true } })
 export class CaptionsGateway implements OnGatewayDisconnect {
   @WebSocketServer() server!: Server;
@@ -77,14 +82,21 @@ export class CaptionsGateway implements OnGatewayDisconnect {
 
   @SubscribeMessage('audio')
   handleAudio(@ConnectedSocket() client: Socket, @MessageBody() chunk: Buffer) {
-    if (client.data.role !== 'speaker') return;
-    this.transcription.send(client.data.code, chunk);
+    const data = client.data as CustomSocketData;
+
+    if (data.role !== 'speaker') return;
+    if (data.code) {
+      this.transcription.send(data.code, chunk);
+    }
   }
 
   @SubscribeMessage('speech:stop')
   handleStop(@ConnectedSocket() client: Socket) {
-    if (client.data.role !== 'speaker') return;
-    this.transcription.stop(client.data.code);
+    const data = client.data as CustomSocketData;
+    if (data.role !== 'speaker') return;
+    if (data.code) {
+      this.transcription.stop(data.code);
+    }
   }
 
   @SubscribeMessage('caption:test')
@@ -92,16 +104,20 @@ export class CaptionsGateway implements OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() body: { text: string },
   ) {
-    if (client.data.role !== 'speaker') return;
-    client
-      .to(client.data.code)
-      .emit('caption', { text: body.text, isFinal: true });
+    const data = client.data as CustomSocketData;
+    if (data.role !== 'speaker') return;
+    if (data.code) {
+      client.to(data.code).emit('caption', { text: body.text, isFinal: true });
+    }
   }
 
   handleDisconnect(client: Socket) {
-    if (client.data.role === 'speaker') {
-      this.transcription.stop(client.data.code);
-      client.to(client.data.code).emit('speaker:disconnected');
+    const data = client.data as CustomSocketData;
+    if (data.role === 'speaker') {
+      if (data.code) {
+        this.transcription.stop(data.code);
+        client.to(data.code).emit('speaker:disconnected');
+      }
     }
   }
 }

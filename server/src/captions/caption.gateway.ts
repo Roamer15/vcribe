@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-
 import {
   ConnectedSocket,
   MessageBody,
@@ -34,8 +31,9 @@ export class CaptionsGateway implements OnGatewayDisconnect {
   ) {
     try {
       const code = this.rooms.create(body?.code);
-      client.data.role = 'display';
-      client.data.code = code;
+      const data = client.data as CustomSocketData;
+      data.role = 'display';
+      data.code = code;
       await client.join(code);
       return { code };
     } catch (error) {
@@ -58,8 +56,9 @@ export class CaptionsGateway implements OnGatewayDisconnect {
       if (!code || !this.rooms.exists(code)) {
         return { ok: false, error: 'Room not found' };
       }
-      client.data.role = 'speaker';
-      client.data.code = code;
+      const data = client.data as CustomSocketData;
+      data.role = 'speaker';
+      data.code = code;
       await client.join(code);
       client.to(code).emit('speaker:connected');
       return { ok: true };
@@ -73,11 +72,14 @@ export class CaptionsGateway implements OnGatewayDisconnect {
 
   @SubscribeMessage('speech:start')
   handleStart(@ConnectedSocket() client: Socket) {
-    if (client.data.role !== 'speaker') return;
-    const code: string = client.data.code;
-    this.transcription.start(code, (caption) => {
-      this.server.to(code).emit('caption', caption); // goes to the TV and the phone
-    });
+    const data = client.data as CustomSocketData;
+    if (data.role !== 'speaker') return;
+    if (data.code) {
+      const code: string = data.code;
+      this.transcription.start(code, (caption) => {
+        this.server.to(code).emit('caption', caption); // goes to the TV and the phone
+      });
+    }
   }
 
   @SubscribeMessage('audio')

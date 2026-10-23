@@ -26,12 +26,11 @@ export class TranscriptionService {
 
     const params = new URLSearchParams({
       model: 'nova-3',
-      language: 'en', // 'fr', or 'multi' for mixed English/French lessons
+      language: 'en',
       interim_results: 'true',
       smart_format: 'true',
       endpointing: '300', // ms of silence before a phrase is finalized
     });
-    // No `encoding` param: the phone sends a container format (WebM/Opus) that Deepgram detects
 
     const ws = new WebSocket(`wss://api.deepgram.com/v1/listen?${params}`, {
       headers: {

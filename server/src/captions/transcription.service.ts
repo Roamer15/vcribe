@@ -1,10 +1,7 @@
-/* eslint-disable @typescript-eslint/no-base-to-string */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-import WebSocket = require('ws'); // if TS complains, use: import * as WebSocket from 'ws';
+import { WebSocket } from 'ws';
+import { SpeechResultSchema } from './speech-result.schema';
 
 type CaptionHandler = (caption: { text: string; isFinal: boolean }) => void;
 
@@ -12,6 +9,16 @@ interface Session {
   ws: WebSocket;
   queue: Buffer[]; // audio that arrives before Deepgram's socket is open
   keepAlive?: NodeJS.Timeout;
+}
+
+interface SpeechResultMessage {
+  type: string;
+  is_final?: boolean;
+  channel?: {
+    alternatives?: Array<{
+      transcript?: string;
+    }>;
+  };
 }
 
 @Injectable()
@@ -51,12 +58,26 @@ export class TranscriptionService {
     });
 
     ws.on('message', (raw) => {
-      const msg = JSON.parse(raw.toString());
+      const textData = Buffer.from(raw as any).toString('utf8');
+      const rawJson = JSON.parse(textData) as SpeechResultMessage;
+
+      const result = SpeechResultSchema.safeParse(rawJson);
+      if (!result.success) {
+        console.warn(`Actual result is as follows: `, result);
+        return;
+      }
+
+      const msg = result.data;
       if (msg.type !== 'Results') return;
+
       const text: string | undefined =
         msg.channel?.alternatives?.[0]?.transcript;
       if (!text) return;
-      onCaption({ text, isFinal: msg.is_final });
+
+      // Note: Ensure msg.is_final is safely coerced to a boolean if your schema allows undefined
+      if (msg.is_final) {
+        onCaption({ text, isFinal: Boolean(msg.is_final) });
+      }
     });
 
     ws.on('error', (err) =>

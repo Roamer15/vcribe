@@ -24,8 +24,7 @@ interface SpeechResultMessage {
 @Injectable()
 export class TranscriptionService {
   private readonly logger = new Logger(TranscriptionService.name);
-  private sessions = new Map<string, Session>(); // one Deepgram connection per room
-
+  private sessions = new Map<string, Session>();
   constructor(private readonly config: ConfigService) {}
 
   start(roomCode: string, onCaption: CaptionHandler) {
@@ -36,7 +35,7 @@ export class TranscriptionService {
       language: 'en',
       interim_results: 'true',
       smart_format: 'true',
-      endpointing: '300', // ms of silence before a phrase is finalized
+      endpointing: '300',
     });
 
     const ws = new WebSocket(`wss://api.deepgram.com/v1/listen?${params}`, {
@@ -48,13 +47,14 @@ export class TranscriptionService {
     this.sessions.set(roomCode, session);
 
     ws.on('open', () => {
-      // The first chunk holds the container header, so it must not be dropped
       for (const chunk of session.queue) ws.send(chunk);
       session.queue = [];
       session.keepAlive = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN)
           ws.send(JSON.stringify({ type: 'KeepAlive' }));
       }, 5000);
+
+      session.keepAlive.unref();
     });
 
     ws.on('message', (raw) => {
@@ -106,7 +106,7 @@ export class TranscriptionService {
     clearInterval(session.keepAlive);
     this.sessions.delete(roomCode);
     if (session.ws.readyState === WebSocket.OPEN) {
-      session.ws.send(JSON.stringify({ type: 'CloseStream' })); // flushes the last words
+      session.ws.send(JSON.stringify({ type: 'CloseStream' }));
     } else {
       session.ws.close();
     }

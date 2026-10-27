@@ -1,9 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class AppService {
   private readonly logger = new Logger(AppService.name);
+  constructor(private readonly config: ConfigService) {}
 
   getHello(): string {
     return 'Hello World!';
@@ -13,7 +15,8 @@ export class AppService {
   async handleCron(): Promise<void> {
     const port = process.env.PORT ?? 3000;
     const healthCheckUrl =
-      process.env.HEALTH_CHECK_URL ?? `http://localhost:${port}/health`;
+      (this.config.get('HEALTH_CHECK_URL') as string) ??
+      `http://localhost:${port}/health`;
 
     try {
       const response = await fetch(healthCheckUrl);
